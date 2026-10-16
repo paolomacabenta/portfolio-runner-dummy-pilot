@@ -1,0 +1,50 @@
+# synthetic=true; execution_authority=false
+# Preparation only. Publishing and dispatch require separate approval.
+name: dummy-only-v5
+on:
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: dummy-only-v5
+  cancel-in-progress: false
+jobs:
+  dummy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Fixed synthetic integrity and direct-child timeout
+        shell: bash
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          umask 077
+          test -n "$RUNNER_TEMP"
+          test -d "$RUNNER_TEMP"
+          work="$(mktemp -d "$RUNNER_TEMP/dummy-v5.XXXXXX")"
+          cleanup() {
+            rc=$?
+            trap - EXIT
+            if ! rm -f -- "$work/evidence.txt"; then rc=1; fi
+            if ! rmdir -- "$work"; then rc=1; fi
+            if test -e "$work"; then rc=1; fi
+            if test "$rc" -eq 0; then
+              printf '%s\n' 'synthetic=true;execution_authority=false;cleanup=PASS'
+            else
+              printf '%s\n' 'synthetic=true;execution_authority=false;pilot=FAIL'
+            fi
+            exit "$rc"
+          }
+          trap cleanup EXIT
+          printf '%s\n' 'synthetic=true;execution_authority=false;dummy=1' > "$work/evidence.txt"
+          test "$(wc -c < "$work/evidence.txt")" -eq 49
+          (
+            cd "$work"
+            printf '%s\n' '0e8981b024bfa9f10f0f718634abded8d161cd2e1719b231d55930fe11591a01  evidence.txt' | sha256sum --check --status
+          )
+          printf '%s\n' 'synthetic=true;execution_authority=false;bytes=49;sha256=0e8981b024bfa9f10f0f718634abded8d161cd2e1719b231d55930fe11591a01;integrity=PASS'
+          set +e
+          timeout --kill-after=1s 1s sleep 5
+          result=$?
+          set -e
+          test "$result" -eq 124
+          printf '%s\n' 'synthetic=true;execution_authority=false;direct_child_timeout_exit=124;check=PASS'
